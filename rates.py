@@ -328,50 +328,40 @@ def _fmt(n: float, decimals: int = 2) -> str:
     return f"{n:,.{decimals}f}"
 
 
-_FEE_LABEL = {
-    "ne": "수수료", "vi": "phí",      "en": "fee",
-    "tl": "bayad", "id": "biaya",    "uz": "komissiya",
-    "th": "ค่าธรรมเนียม", "zh": "手续费",
-}
+def _speed_short(speed: str) -> str:
+    """Extract concise English speed label."""
+    if "/" in speed:
+        return speed.split("/")[-1].strip()
+    return speed
 
-_HEADERS_AMOUNT = {
-    "ne": "💸 *₩{amount} → {currency}*", "vi": "💸 *₩{amount} → {currency}*",
-    "en": "💸 *₩{amount} → {currency}*", "tl": "💸 *₩{amount} → {currency}*",
-    "id": "💸 *₩{amount} → {currency}*", "uz": "💸 *₩{amount} → {currency}*",
-    "th": "💸 *₩{amount} → {currency}*", "zh": "💸 *₩{amount} → {currency}*",
-}
 
-_HEADERS_RATES = {
-    "ne": "📊 *{currency} हालको दरहरू*",      "vi": "📊 *Tỷ giá {currency} hiện tại*",
-    "en": "📊 *Current {currency} Rates*",    "tl": "📊 *Kasalukuyang {currency} Rates*",
-    "id": "📊 *Kurs {currency} Saat Ini*",    "uz": "📊 *Joriy {currency} kurslari*",
-    "th": "📊 *อัตรา {currency} ปัจจุบัน*",   "zh": "📊 *当前 {currency} 汇率*",
-}
+_RANK_BADGE = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣"]
+
+_HEADER_AMOUNT = "💸 *₩{amount} → {currency}*"
+_HEADER_RATES  = "📊 *{currency} — Live Rates*"
+_DIVIDER       = "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"
 
 _SAVINGS = {
-    "ne": "\n💡 Bridge प्रयोगले: *+{saving} {currency}* बचत!",
-    "vi": "\n💡 Bằng cách so sánh: *+{saving} {currency}* thêm!",
-    "en": "\n💡 By comparing: *+{saving} {currency}* extra!",
-    "tl": "\n💡 Sa paghahambing: *+{saving} {currency}* dagdag!",
-    "id": "\n💡 Dengan membandingkan: *+{saving} {currency}* lebih!",
-    "uz": "\n💡 Taqqoslash orqali: *+{saving} {currency}* qo'shimcha!",
-    "th": "\n💡 โดยการเปรียบเทียบ: *+{saving} {currency}* เพิ่มขึ้น!",
-    "zh": "\n💡 通过比较节省: *+{saving} {currency}*！",
+    "ne": "💡 तुलना गरेर *{saving} {currency}* बचत गर्नुस्!",
+    "vi": "💡 So sánh để tiết kiệm *{saving} {currency}*!",
+    "en": "💡 Save up to *{saving} {currency}* by comparing!",
+    "tl": "💡 Makatipid ng *{saving} {currency}* sa paghahambing!",
+    "id": "💡 Hemat *{saving} {currency}* dengan membandingkan!",
+    "uz": "💡 Taqqoslash orqali *{saving} {currency}* tejang!",
+    "th": "💡 ประหยัด *{saving} {currency}* โดยการเปรียบเทียบ!",
+    "zh": "💡 通过比较节省 *{saving} {currency}*！",
 }
 
 _DISCLAIMER = {
-    "ne": "\n_Bridge ले तपाईंको पैसा छुँदैन। केवल तुलना गर्छ।_",
-    "vi": "\n_Bridge không bao giờ chạm vào tiền của bạn._",
-    "en": "\n_Bridge never touches your money. We only compare._",
-    "tl": "\n_Hindi kailanman hahawakan ng Bridge ang iyong pera._",
-    "id": "\n_Bridge tidak pernah menyentuh uang Anda._",
-    "uz": "\n_Bridge hech qachon pulingizga tegmaydi._",
-    "th": "\n_Bridge ไม่เคยแตะต้องเงินของคุณ_",
-    "zh": "\n_Bridge 从不接触您的钱，只做比较。_",
+    "ne": "_Bridge ले तपाईंको पैसा छुँदैन — केवल तुलना गर्छ_",
+    "vi": "_Bridge không bao giờ chạm vào tiền của bạn_",
+    "en": "_Bridge never touches your money — comparison only_",
+    "tl": "_Hindi hahawakan ng Bridge ang iyong pera_",
+    "id": "_Bridge tidak pernah menyentuh uang Anda_",
+    "uz": "_Bridge hech qachon pulingizga tegmaydi_",
+    "th": "_Bridge ไม่เคยแตะต้องเงินของคุณ_",
+    "zh": "_Bridge 从不接触您的钱_",
 }
-
-_LIVE_TAG  = " 🟢"   # appended to GME/Hanpass rate lines
-_EST_TAG   = " ~"    # appended to estimated rate lines
 
 
 def format_comparison(
@@ -396,50 +386,53 @@ def format_comparison(
     # Calculate recipient amounts
     for r in rates:
         if show_amounts and amount_krw > 0:
-            fee_krw              = r["fee_flat_krw"] + (amount_krw * r["fee_percent"])
-            net_krw              = amount_krw - fee_krw
+            fee_krw               = r["fee_flat_krw"] + (amount_krw * r["fee_percent"])
+            net_krw               = amount_krw - fee_krw
             r["recipient_amount"] = net_krw * r["rate"]
             r["fee_total_krw"]    = fee_krw
         else:
             r["recipient_amount"] = r["rate"]
 
     sorted_rates = sorted(rates, key=lambda x: x["recipient_amount"], reverse=True)
-    best         = sorted_rates[0]
-    fee_lbl      = _FEE_LABEL.get(lang, "fee")
+    best  = sorted_rates[0]
+    worst = sorted_rates[-1]
 
+    # ── Header ────────────────────────────────────────────
     if show_amounts and amount_krw > 0:
-        header = _HEADERS_AMOUNT.get(lang, _HEADERS_AMOUNT["en"]).format(
-            amount=_fmt(amount_krw, 0), currency=to_currency
-        )
+        header = _HEADER_AMOUNT.format(amount=_fmt(amount_krw, 0), currency=to_currency)
     else:
-        header = _HEADERS_RATES.get(lang, _HEADERS_RATES["en"]).format(
-            currency=to_currency
-        )
+        header = _HEADER_RATES.format(currency=to_currency)
 
-    lines = [header, ""]
+    lines = [header, _DIVIDER, ""]
 
+    # ── Platform rows ─────────────────────────────────────
     for i, r in enumerate(sorted_rates):
-        badge     = "✅ *BEST*  " if i == 0 else "          "
-        is_live   = r.get("data_source") == "live"
-        live_mark = _LIVE_TAG if is_live else _EST_TAG
+        badge    = _RANK_BADGE[i] if i < len(_RANK_BADGE) else "▪️"
+        is_live  = r.get("data_source") == "live"
+        live_tag = " `live`" if is_live else ""
+        speed    = _speed_short(r["speed"])
 
         if show_amounts and amount_krw > 0:
-            recv = _fmt(r["recipient_amount"], 2)
-            fee  = _fmt(r["fee_total_krw"], 0)
+            recv     = _fmt(r["recipient_amount"], 2)
+            fee      = _fmt(r["fee_total_krw"], 0)
+            best_tag = "  ← _best_" if i == 0 else ""
             lines.append(
-                f"{badge}{r['color']} *{r['platform']}*{live_mark}\n"
-                f"   {to_currency} {recv}  |  {fee_lbl} ₩{fee}  |  {r['speed']}"
+                f"{badge} {r['color']} *{r['platform']}*{live_tag}{best_tag}\n"
+                f"   *{to_currency} {recv}*  ·  fee ₩{fee}  ·  {speed}"
             )
         else:
             rate_str = f"{r['rate']:.5f}"
             lines.append(
-                f"{badge}{r['color']} *{r['platform']}*{live_mark}\n"
-                f"   1 KRW = {rate_str} {to_currency}  |  {r['speed']}"
+                f"{badge} {r['color']} *{r['platform']}*{live_tag}\n"
+                f"   `1 KRW = {rate_str} {to_currency}`  ·  {speed}"
             )
 
-    # Savings callout
+        lines.append("")   # blank line between rows
+
+    lines.append(_DIVIDER)
+
+    # ── Savings callout ───────────────────────────────────
     if show_amounts and amount_krw > 0 and len(sorted_rates) >= 2:
-        worst  = sorted_rates[-1]
         saving = best["recipient_amount"] - worst["recipient_amount"]
         if saving > 0.01:
             lines.append(
@@ -448,7 +441,5 @@ def format_comparison(
                 )
             )
 
-    # Legend
-    lines.append("\n_🟢 live rate  ~ estimated_")
     lines.append(_DISCLAIMER.get(lang, _DISCLAIMER["en"]))
     return "\n".join(lines)
