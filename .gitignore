@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.log
+users.json
+alerts.json
+referral_clicks.json
+rate_cache.json
