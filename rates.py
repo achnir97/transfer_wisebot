@@ -405,12 +405,20 @@ def format_comparison(
 
     lines = [header, _DIVIDER, ""]
 
+    # Pre-compute 1M KRW reference for every platform
+    REF_AMOUNT = 1_000_000
+    for r in rates:
+        fee_1m              = r["fee_flat_krw"] + REF_AMOUNT * r["fee_percent"]
+        net_1m              = REF_AMOUNT - fee_1m
+        r["ref_1m_amount"]  = net_1m * r["rate"]
+
     # ── Platform rows ─────────────────────────────────────
     for i, r in enumerate(sorted_rates):
         badge    = _RANK_BADGE[i] if i < len(_RANK_BADGE) else "▪️"
         is_live  = r.get("data_source") == "live"
         live_tag = " `live`" if is_live else ""
         speed    = _speed_short(r["speed"])
+        ref_1m   = _fmt(r["ref_1m_amount"], 2)
 
         if show_amounts and amount_krw > 0:
             recv     = _fmt(r["recipient_amount"], 2)
@@ -418,13 +426,15 @@ def format_comparison(
             best_tag = "  ← _best_" if i == 0 else ""
             lines.append(
                 f"{badge} {r['color']} *{r['platform']}*{live_tag}{best_tag}\n"
-                f"   *{to_currency} {recv}*  ·  fee ₩{fee}  ·  {speed}"
+                f"   *{to_currency} {recv}*  ·  fee ₩{fee}  ·  {speed}\n"
+                f"   _₩1,000,000 → {to_currency} {ref_1m}_"
             )
         else:
             rate_str = f"{r['rate']:.5f}"
             lines.append(
                 f"{badge} {r['color']} *{r['platform']}*{live_tag}\n"
-                f"   `1 KRW = {rate_str} {to_currency}`  ·  {speed}"
+                f"   `1 KRW = {rate_str} {to_currency}`  ·  {speed}\n"
+                f"   _₩1,000,000 → {to_currency} {ref_1m}_"
             )
 
         lines.append("")   # blank line between rows

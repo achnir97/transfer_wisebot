@@ -69,45 +69,54 @@ def log_click(
     platform: str,
     amount: int,
     currency: str,
+    click_type: str = "actual",
 ) -> None:
-    """Log a referral click for commission tracking."""
+    """
+    Log a referral click for commission tracking.
+
+    click_type:
+      "actual" — user tapped the Send Here button (real intent)
+      "intent" — comparison was shown (kept for backwards compat)
+    """
     clicks = _load_clicks()
 
     entry = {
         "user_id_hash": _hash_user_id(user_id),
-        "platform": platform,
-        "amount_krw": amount,
-        "currency": currency,
-        "clicked_at": datetime.now().isoformat(),
-        "date": datetime.now().strftime("%Y-%m-%d"),
+        "platform":     platform,
+        "amount_krw":   amount,
+        "currency":     currency,
+        "click_type":   click_type,
+        "clicked_at":   datetime.now().isoformat(),
+        "date":         datetime.now().strftime("%Y-%m-%d"),
     }
 
     clicks.append(entry)
     _save_clicks(clicks)
 
     logger.info(
-        f"Referral click | platform={platform} | "
+        f"Referral {click_type} click | platform={platform} | "
         f"amount={amount} KRW | currency={currency}"
     )
 
 
 def get_referral_stats() -> dict:
     """Get referral stats for revenue tracking."""
-    clicks = _load_clicks()
-    total = len(clicks)
+    clicks      = _load_clicks()
+    actual      = [c for c in clicks if c.get("click_type", "actual") == "actual"]
     by_platform = {}
-    by_date = {}
+    by_date     = {}
 
-    for c in clicks:
+    for c in actual:
         p = c.get("platform", "unknown")
         d = c.get("date", "unknown")
         by_platform[p] = by_platform.get(p, 0) + 1
-        by_date[d] = by_date.get(d, 0) + 1
+        by_date[d]     = by_date.get(d, 0) + 1
 
     return {
-        "total_clicks": total,
-        "by_platform": by_platform,
-        "by_date": dict(sorted(by_date.items(), reverse=True)[:30]),
+        "total_clicks":        len(actual),
+        "total_clicks_all":    len(clicks),
+        "by_platform":         by_platform,
+        "by_date":             dict(sorted(by_date.items(), reverse=True)[:30]),
     }
 
 

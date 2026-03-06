@@ -88,6 +88,37 @@ def increment_comparison(user_id: int) -> None:
         _save(USERS_FILE, users)
 
 
+def log_user_click(
+    user_id: int,
+    platform: str,
+    amount: int,
+    currency: str,
+) -> None:
+    """Record that user tapped a Send Here button — stores last 20 clicks per user."""
+    users = _load(USERS_FILE, {})
+    key   = str(user_id)
+    if key not in users:
+        return
+
+    entry = {
+        "platform":   platform,
+        "amount_krw": amount,
+        "currency":   currency,
+        "clicked_at": datetime.now().isoformat(),
+    }
+
+    history = users[key].get("click_history", [])
+    history.append(entry)
+    users[key]["click_history"]   = history[-20:]   # keep last 20
+    users[key]["last_click"]      = entry
+    users[key]["last_active"]     = datetime.now().isoformat()
+    _save(USERS_FILE, users)
+    logger.info(
+        f"User click | user={user_id} | platform={platform} | "
+        f"amount={amount} KRW | currency={currency}"
+    )
+
+
 def get_stats() -> dict:
     """Get basic user stats for admin monitoring."""
     users = _load(USERS_FILE, {})

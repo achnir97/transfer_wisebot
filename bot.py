@@ -47,7 +47,7 @@ from telegram.ext import (
 from rates    import get_live_rates, format_comparison, get_platforms_for_currency
 from ai       import get_ai_response
 from users    import (
-    save_user, get_user, update_user, increment_comparison,
+    save_user, get_user, update_user, increment_comparison, log_user_click,
     save_alert, get_all_alerts, get_user_alerts,
     remove_alert, remove_all_user_alerts, get_stats,
 )
@@ -916,23 +916,11 @@ async def _do_comparison(
 
         buttons = []
         for r in sorted_rates:
-            ref_url = generate_referral_link(
-                platform=r["platform"],
-                user_id=update.effective_user.id,
-                amount=amount,
-                currency=currency,
-            )
-            # Log intent (actual click tracked via URL redirect if set up)
-            log_click(
-                user_id=update.effective_user.id,
-                platform=r["platform"],
-                amount=amount,
-                currency=currency,
-            )
+            # Use callback button so the bot gets notified on tap → real click log
             buttons.append([
                 InlineKeyboardButton(
                     f"{t('send_button', lang)} {r['platform']}",
-                    url=ref_url,
+                    callback_data=f"go|{r['platform']}|{amount}|{currency}",
                 )
             ])
 
@@ -991,6 +979,60 @@ async def handle_callback(
     """Handle inline keyboard button callbacks."""
     query = update.callback_query
     await query.answer()
+
+    # ── "Send Here" button tap → real click log ──────────
+    if query.data.startswith("go|"):
+        parts    = query.data.split("|")
+        platform = parts[1]
+        amount   = int(parts[2])
+        currency = parts[3]
+        lang     = get_user_lang(context, update)
+        user     = update.effective_user
+
+        # Log the actual click (user intentionally tapped the button)
+        log_click(
+            user_id=user.id,
+            platform=platform,
+            amount=amount,
+            currency=currency,
+            click_type="actual",
+        )
+        log_user_click(
+            user_id=user.id,
+            platform=platform,
+            amount=amount,
+            currency=currency,
+        )
+        logger.info(
+            f"ACTUAL CLICK | user={user.id} | @{user.username} | "
+            f"platform={platform} | amount={amount} KRW | currency={currency}"
+        )
+
+        ref_url = generate_referral_link(
+            platform=platform,
+            user_id=user.id,
+            amount=amount,
+            currency=currency,
+        )
+        send_label = {
+            "ne": f"➡️ {platform} मा जानुस्",
+            "vi": f"➡️ Đến {platform}",
+            "en": f"➡️ Go to {platform}",
+            "tl": f"➡️ Pumunta sa {platform}",
+            "id": f"➡️ Pergi ke {platform}",
+            "uz": f"➡️ {platform} ga o'ting",
+            "th": f"➡️ ไปที่ {platform}",
+            "zh": f"➡️ 前往 {platform}",
+        }
+        await query.answer()
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=send_label.get(lang, send_label["en"]),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(f"🔗 Open {platform}", url=ref_url)
+            ]]),
+        )
+        return MAIN_MENU
 
     if query.data == "send_again":
         lang = get_user_lang(context, update)
