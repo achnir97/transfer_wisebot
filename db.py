@@ -6,10 +6,11 @@ Import get_db() wherever you need database access.
 
 import os
 import logging
+from typing import Optional
 from supabase import create_client, Client
 
 logger  = logging.getLogger(__name__)
-_client: Client | None = None
+_client: Optional[Client] = None
 
 
 def get_db() -> Client:
