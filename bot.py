@@ -27,6 +27,10 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 
+from handler_core import handle_message
+from rates import get_live_rates, format_comparison
+from users import save_user, get_user, update_user, increment_comparison, log_user_click, save_alert, get_user_alerts, get_all_alerts, remove_alert, remove_all_user_alerts, get_stats
+from referral import generate_referral_link, log_click, get_referral_stats
 from telegram import (
     Update,
     InlineKeyboardButton,

@@ -15,13 +15,8 @@ logger = logging.getLogger(__name__)
 
 # ─── AFFILIATE URL TEMPLATES ──────────────────────────────
 AFFILIATE_URLS = {
-    "GME":          "https://online.gmeremit.com/?utm_source=bridge_bot&utm_medium=telegram",
-    "Hanpass":      "https://www.hanpass.com/?utm_source=bridge_bot&utm_medium=telegram",
-    "IME Nepal":    "https://www.imenepal.com/?ref=bridge_bot&utm_source=bridge&utm_medium=telegram",
-    "Wise":         "https://wise.com/invite/u/bridge?utm_source=bridge_bot&utm_medium=telegram",
-    "Western Union":"https://www.westernunion.com/kr/ko/send-money.html?ref=bridge",
-    "Remitly":      "https://remitly.com/?ref=bridge_bot&utm_source=bridge&utm_medium=telegram",
-    "Prabhu Money": "https://prabhupay.com/?ref=bridge&utm_source=bridge_bot",
+    "GME":     "https://online.gmeremit.com/?utm_source=bridge_bot&utm_medium=telegram",
+    "Hanpass": "https://www.hanpass.com/?utm_source=bridge_bot&utm_medium=telegram",
 }
 
 
@@ -47,7 +42,7 @@ def generate_referral_link(
             f"?uid={uid_hash}&amt={amount}&cur={currency}"
         )
 
-    base_url  = AFFILIATE_URLS.get(platform, AFFILIATE_URLS["Wise"])
+    base_url  = AFFILIATE_URLS.get(platform, AFFILIATE_URLS["GME"])
     separator = "&" if "?" in base_url else "?"
     return (
         f"{base_url}{separator}"

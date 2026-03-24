@@ -3,7 +3,6 @@ fetchers.py — Async provider API clients
 =========================================
 All three endpoints confirmed via DevTools network interception.
 
-SentBe:  GET  https://fx.service.sentbe.com/v1/global_rates         (no auth)
 GME:     POST https://online.gmeremit.com/ExchangeRate.aspx          (form-data)
 Hanpass: POST https://app.hanpass.com/app/v1/remittance/get-cost     (JSON, memberSeq=1)
 """
@@ -18,9 +17,6 @@ import httpx
 log = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────
-
-SENTBE_FEE   = 3_500   # KRW, added on top of send amount (fixed fee, not returned by API)
-HANPASS_FEE  = 2_500   # KRW (transferFee field from API — confirmed ₩2,500)
 
 GME_COUNTRY_NAMES = {
     "PHP": "Philippines", "NPR": "Nepal",      "VND": "Vietnam",
@@ -99,7 +95,6 @@ class RateFetcher:
         Failed providers return an error key — never raises.
         """
         results = await asyncio.gather(
-            self._fetch_sentbe(from_currency, to_currency),
             self._fetch_gme(send_amount, from_currency, to_currency),
             self._fetch_hanpass(send_amount, from_currency, to_currency),
             return_exceptions=True,
@@ -111,57 +106,17 @@ class RateFetcher:
                 return {"provider": provider_name, "error": str(result)}
             return result
 
-        sentbe_raw  = _unwrap("SentBe",  results[0])
-        gme_raw     = _unwrap("GME",     results[1])
-        hanpass_raw = _unwrap("Hanpass", results[2])
+        gme_raw     = _unwrap("GME",     results[0])
+        hanpass_raw = _unwrap("Hanpass", results[1])
 
         return {
             "from_currency": from_currency,
             "to_currency":   to_currency,
             "send_amount":   send_amount,
-            "sentbe":        sentbe_raw,
             "gme":           gme_raw,
             "hanpass":       hanpass_raw,
             "fetched_at":    _now(),
         }
-
-    # ── SentBe ───────────────────────────────────────────────
-
-    async def _fetch_sentbe(self, from_cur: str, to_cur: str) -> dict:
-        url = "https://fx.service.sentbe.com/v1/global_rates"
-        headers = {
-            "Accept":  "application/json, text/plain, */*",
-            "Origin":  "https://sentbe.com",
-            "Referer": "https://sentbe.com/",
-        }
-        try:
-            resp = await self._client.get(url, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-
-            key     = f"{from_cur.lower()}_{to_cur.lower()}"
-            mid_key = f"{key}_mid"
-
-            rate = float(data.get(key, 0) or 0)
-            mid  = float(data.get(mid_key, 0) or 0)
-
-            if not rate:
-                return {"provider": "SentBe", "error": f"No rate found for key '{key}'"}
-
-            log.info(f"SentBe  {from_cur}→{to_cur}  rate={rate}  mid={mid}")
-            return {
-                "provider":         "SentBe",
-                "exchange_rate":    rate,
-                "mid_market_rate":  mid,
-                "markup_percent":   _markup(rate, mid),
-                "transfer_fee_krw": SENTBE_FEE,
-                "transfer_speed":   "1–2 days",
-                "collected_at":     _now(),
-                "source":           "api",
-            }
-        except Exception as e:
-            log.error(f"SentBe fetch error: {e}")
-            return {"provider": "SentBe", "error": str(e)}
 
     # ── GME ──────────────────────────────────────────────────
 
