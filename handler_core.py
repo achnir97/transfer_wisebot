@@ -205,21 +205,53 @@ class BridgeResponse:
     quick_replies: list[str] = field(default_factory=list)  # language picker etc.
 
 
-# ── State store (in-memory; fine for multi-platform MVP) ──
-# Key: "{platform}:{user_id}"  Value: {"state": str, "data": dict}
-_user_states: dict[str, dict] = {}
+# ── State store (Supabase-backed for scalability) ─────────
+# Falls back to in-memory if DB unavailable
+
+_state_cache: dict[str, dict] = {}   # local cache to avoid redundant DB reads
 
 def _state_key(platform: str, user_id: str) -> str:
     return f"{platform}:{user_id}"
 
 def _get_state(platform: str, user_id: str) -> dict:
-    return _user_states.get(_state_key(platform, user_id), {"state": "idle", "data": {}})
+    key = _state_key(platform, user_id)
+    if key in _state_cache:
+        return _state_cache[key]
+    try:
+        uid_int = int(user_id) if user_id.isdigit() else 0
+        if uid_int:
+            from db import get_db
+            res = get_db().table("users").select("state,state_data").eq("user_id", uid_int).execute()
+            if res.data and res.data[0].get("state"):
+                s = {"state": res.data[0]["state"], "data": res.data[0].get("state_data") or {}}
+                _state_cache[key] = s
+                return s
+    except Exception:
+        pass
+    return {"state": "idle", "data": {}}
 
 def _set_state(platform: str, user_id: str, state: str, data: dict = None) -> None:
-    _user_states[_state_key(platform, user_id)] = {"state": state, "data": data or {}}
+    key = _state_key(platform, user_id)
+    val = {"state": state, "data": data or {}}
+    _state_cache[key] = val
+    try:
+        uid_int = int(user_id) if user_id.isdigit() else 0
+        if uid_int:
+            from db import get_db
+            get_db().table("users").update({"state": state, "state_data": data or {}}).eq("user_id", uid_int).execute()
+    except Exception:
+        pass
 
 def _clear_state(platform: str, user_id: str) -> None:
-    _user_states.pop(_state_key(platform, user_id), None)
+    key = _state_key(platform, user_id)
+    _state_cache.pop(key, None)
+    try:
+        uid_int = int(user_id) if user_id.isdigit() else 0
+        if uid_int:
+            from db import get_db
+            get_db().table("users").update({"state": None, "state_data": None}).eq("user_id", uid_int).execute()
+    except Exception:
+        pass
 
 
 # ── Main handler ──────────────────────────────────────────
@@ -265,7 +297,7 @@ async def handle_message(
             currency = existing.get("currency", currency)
         return BridgeResponse(
             text=_t("welcome", lang),
-            quick_replies=["💸 Compare Rates", "📊 Show Rates", "🔔 Set Alert", "❓ Help"],
+            quick_replies=["💸 Compare Rates", "📊 Show Rates", "🔔 Set Alert", "🌐 Language"],
         )
 
     # ── Help ──────────────────────────────────────────────
@@ -273,25 +305,53 @@ async def handle_message(
         return BridgeResponse(text=_t("help", lang))
 
     # ── Language change ───────────────────────────────────
-    if text_clean in ("language", "lang", "भाषा", "/language"):
+    if text_clean in ("language", "lang", "भाषा", "/language", "🌐 language"):
         _set_state(platform, user_id, "choosing_language")
-        lang_list = "\n".join([f"• {v}" for v in LANGUAGES.values()])
+        lang_list = "\n".join([
+            f"{i+1}️⃣ {v}" for i, v in enumerate(LANGUAGES.values())
+        ])
         return BridgeResponse(
-            text=f"🌐 Choose your language:\n\n{lang_list}\n\nReply with the language name.",
-            quick_replies=list(LANGUAGES.values()),
+            text=f"🌐 Choose your language:\n\n{lang_list}\n\nReply with the number or name.",
+            quick_replies=list(LANGUAGES.values())[:3] + ["More →"],
         )
 
-    # ── Check if user replied with a language name ────────
-    for code, label in LANGUAGES.items():
-        # Match by emoji+name or just the name part
-        if text.strip() in (label, label.split(" ", 1)[-1].strip()):
-            new_currency = CURRENCIES.get(code, "NPR")
-            _update_user_lang(user_id, platform, code, new_currency)
-            _clear_state(platform, user_id)
-            return BridgeResponse(
-                text=f"✅ Language set to {label}",
-                quick_replies=["💸 Compare Rates", "📊 Show Rates", "🔔 Set Alert"],
-            )
+    # ── Check if user replied with a language number or name ──
+    lang_items = list(LANGUAGES.items())
+    matched_lang = None
+    # Match by number (1-8)
+    if text_clean.strip() in [str(i+1) for i in range(len(lang_items))]:
+        idx = int(text_clean.strip()) - 1
+        matched_lang = lang_items[idx]
+    else:
+        # Match by emoji+name or just name
+        for code, label in lang_items:
+            if text.strip() in (label, label.split(" ", 1)[-1].strip()):
+                matched_lang = (code, label)
+                break
+    if matched_lang:
+        code, label = matched_lang
+        new_currency = CURRENCIES.get(code, "NPR")
+        _update_user_lang(user_id, platform, code, new_currency)
+        _clear_state(platform, user_id)
+        return BridgeResponse(
+            text=f"✅ Language set to {label}\n\n" + _t("welcome", code),
+            quick_replies=["💸 Compare Rates", "📊 Show Rates", "🔔 Set Alert", "🌐 Language"],
+        )
+
+    # ── New Amount (after comparison) ─────────────────────
+    if text_clean in ("🔄 new amount", "new amount", "compare again"):
+        _set_state(platform, user_id, "awaiting_amount", {"lang": lang, "currency": currency})
+        return BridgeResponse(text=_t("ask_amount", lang))
+
+    # ── More languages ────────────────────────────────────
+    if text_clean in ("more →", "more", "more languages"):
+        lang_list = "\n".join([
+            f"{i+1}️⃣ {v}" for i, v in enumerate(LANGUAGES.values())
+        ])
+        return BridgeResponse(
+            text=f"🌐 Choose your language:\n\n{lang_list}\n\nReply with the number or name.",
+            quick_replies=list(LANGUAGES.values())[3:],
+        )
 
     # ── Alert setup ───────────────────────────────────────
     if text_clean in ("alert", "/alert", "🔔 set alert", "अलर्ट", "cảnh báo", "peringatan", "ogohlantirish", "แจ้งเตือน", "提醒"):
@@ -315,8 +375,8 @@ async def handle_message(
 
     # ── Fallback ──────────────────────────────────────────
     return BridgeResponse(
-        text=_t("ask_amount", lang),
-        quick_replies=["💸 Compare Rates", "📊 Show Rates", "🔔 Set Alert", "❓ Help"],
+        text=_t("welcome", lang),
+        quick_replies=["💸 Compare Rates", "📊 Show Rates", "🔔 Set Alert", "🌐 Language"],
     )
 
 
@@ -398,7 +458,11 @@ async def _do_comparison(
     except Exception:
         pass
 
-    return BridgeResponse(text=text, buttons=buttons)
+    return BridgeResponse(
+        text=text,
+        buttons=buttons,
+        quick_replies=["🔄 New Amount", "🔔 Set Alert", "🌐 Language"],
+    )
 
 
 async def _do_rates_only(lang: str, currency: str) -> BridgeResponse:
