@@ -242,6 +242,17 @@ async def handle_message(
 
     logger.info(f"[{platform}] user={user_id} state={state} text={text[:40]!r}")
 
+    # ── Save/update user on every message ─────────────────
+    uid_int = int(user_id) if user_id.isdigit() else 0
+    if uid_int:
+        existing = get_user(uid_int)
+        if existing:
+            lang     = existing.get("language", lang)
+            currency = existing.get("currency", currency)
+        else:
+            save_user(uid_int, user_name or None, None, lang, currency)
+            update_user(uid_int, {"platform": platform})
+
     # ── State: waiting for alert rate ─────────────────────
     if state == "awaiting_alert_rate":
         return await _handle_alert_rate_input(text_clean, user_id, platform, lang, currency, state_data["data"])
