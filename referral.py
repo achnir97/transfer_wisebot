@@ -15,8 +15,10 @@ logger = logging.getLogger(__name__)
 
 # ─── AFFILIATE URL TEMPLATES ──────────────────────────────
 AFFILIATE_URLS = {
-    "GME":     "https://online.gmeremit.com/?utm_source=bridge_bot&utm_medium=telegram",
-    "Hanpass": "https://www.hanpass.com/?utm_source=bridge_bot&utm_medium=telegram",
+    "GME":      "https://online.gmeremit.com/?utm_source=bridge_bot&utm_medium=telegram",
+    "Hanpass":  "https://www.hanpass.com/?utm_source=bridge_bot&utm_medium=telegram",
+    "CrossEnf": "https://crossenf.com/?utm_source=bridge_bot&utm_medium=telegram",
+    "E9Pay":    "https://www.e9pay.co.kr/?utm_source=bridge_bot&utm_medium=telegram",
 }
 
 
