@@ -25,14 +25,28 @@ PLATFORMS = {
         "speed":          "1-2일 / 1-2 days",
         "url":            "https://online.gmeremit.com",
         "affiliate_base": "https://online.gmeremit.com/?utm_source=bridge_bot",
-        "currencies":     ["NPR", "VND", "PHP", "IDR", "UZS", "THB", "BDT", "USD", "CNY"],
+        "currencies":     ["NPR", "VND", "PHP", "IDR", "UZS", "THB", "BDT", "USD", "CNY", "KHR"],
     },
     "Hanpass": {
         "color":          "🔵",
         "speed":          "당일 / Same day",
         "url":            "https://www.hanpass.com",
         "affiliate_base": "https://www.hanpass.com/?utm_source=bridge_bot",
-        "currencies":     ["NPR", "VND", "PHP", "IDR", "UZS", "THB", "BDT", "USD", "CNY"],
+        "currencies":     ["NPR", "VND", "PHP", "IDR", "UZS", "THB", "BDT", "USD", "CNY", "KHR"],
+    },
+    "CrossEnf": {
+        "color":          "🟢",
+        "speed":          "당일 / Same day",
+        "url":            "https://crossenf.com",
+        "affiliate_base": "https://crossenf.com/?utm_source=bridge_bot",
+        "currencies":     ["NPR", "VND", "PHP", "IDR", "UZS", "THB", "BDT", "USD", "CNY", "MNT", "KHR", "MMK", "LKR", "PKR"],
+    },
+    "E9Pay": {
+        "color":          "🟠",
+        "speed":          "당일 / Same day",
+        "url":            "https://www.e9pay.co.kr",
+        "affiliate_base": "https://www.e9pay.co.kr/?utm_source=bridge_bot",
+        "currencies":     ["NPR"],   # E9Pay only supports NPR from Korea
     },
 }
 
@@ -112,11 +126,12 @@ async def get_live_rates(from_currency: str, to_currency: str) -> list[dict]:
 
         for platform in supported:
             cfg   = PLATFORMS[platform]
-            slug  = platform.lower()   # "gme" | "hanpass"
+            slug  = platform.lower()   # "gme" | "hanpass" | "crossenf"
             pdata = real_data.get(slug, {})
 
             if "error" in pdata or not pdata.get("exchange_rate"):
-                logger.warning(f"{platform} API failed, skipping: {pdata.get('error')}")
+                lvl = logger.debug if "Unsupported currency" in str(pdata.get("error","")) else logger.warning
+                lvl(f"{platform} skipped for {to_currency}: {pdata.get('error')}")
                 continue
 
             rates.append({

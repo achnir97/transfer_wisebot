@@ -84,6 +84,7 @@ async def receive_message(request: Request):
         logger.error(f"WhatsApp webhook processing error: {e}", exc_info=True)
 
     # Always return 200 — Meta retries if it doesn't get 200
+    logger.info(f"Webhook processed: {data}")
     return {"status": "ok"}
 
 
